@@ -1,0 +1,48 @@
+# our build should run within a Ruby box
+box: wercker/ruby
+build:
+  steps:
+    # Run a smart version of bundle install
+    # which improves build execution time of
+    # future builds
+    - bundle-install
+
+  # Generate staging
+    - script:
+        name: generate staging site
+        code: |-
+          bundle exec jekyll build --trace
+
+    - script:
+        name: copy site output
+        code: |-
+          # Copy site to output directory for staging and production
+          mkdir -p $WERCKER_OUTPUT_DIR/{staging,production}
+          cp --recursive _site/* "$WERCKER_OUTPUT_DIR/staging"
+          cp --recursive _site/* "$WERCKER_OUTPUT_DIR/production"
+
+    - create-file:
+        name: generate staging robots.txt
+        filename: $WERCKER_OUTPUT_DIR/staging/robots.txt
+        content: |-
+          # This is a staging version
+          # of blog.abstractfactory.io, no need to index it.
+          User-agent: *
+          Disallow: /
+
+
+    - create-file:
+        name: generate production robots.txt
+        filename: $WERCKER_OUTPUT_DIR/production/robots.txt
+        content: |-
+          User-agent: *
+          Allow: /
+          Sitemap: http://blog.abstractfactory.io/sitemap.xml
+
+deploy:
+  steps:
+    - s3sync:
+        key-id: $KEY
+        key-secret: $SECRET
+        bucket-url: $BUCKET
+        source-dir: $SOURCE
